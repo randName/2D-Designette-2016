@@ -5,6 +5,7 @@ from soar.io import io
 from libdw import gfx
 from robot import RobotMover
 
+mover = RobotMover('bdSM','FFF')
 
 #####################
 ##  Brain methods  ##
