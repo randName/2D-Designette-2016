@@ -3,7 +3,7 @@ sys.path.append( os.getcwd() )
 
 from soar.io import io
 from libdw import gfx
-from robot import RobotMover
+from robotm import RobotMover
 
 mover = RobotMover('bdSM','FFF')
 
