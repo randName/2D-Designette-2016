@@ -14,12 +14,14 @@ class RobotMover(sm.SM):
 
 	def getNextValues( self, state, inp ):
 		
+		a = io.Action()
+
 		if isinstance( state, basestring ):
 			curS = 'J'
 			path = state
 		else:
 			curS, path, jtype = state
-			J = ( ('J',path,jtype), io.Action() )
+			J = ( ( 'J', path, jtype ), a )
 
 		# print '\t'.join( str(round(i,3)) for i in dist )
 
@@ -31,17 +33,12 @@ class RobotMover(sm.SM):
 				return state, io.Action()
 		except TypeError:
 			pass
-	
+
+		# if curS not in 'HJ': print ( "%2s" % curS )
+
 		dist = [ min(2,i) for i in inp.sonars ]
 		em = ( dist[0] > self.corridor, dist[4] > self.corridor )
-
-		if curS not in 'HJ': print ( "%2s" % curS )
-		
-		fv = 0
-		rv = 0
-		
 		err = ( dist[0] - dist[4], dist[1] - dist[3] )
-		sur = ( sum(dist[0:2])-1.7, sum(dist[3:5])-1.7 )
 
 		if curS == 'H':
 			pass
@@ -71,28 +68,30 @@ class RobotMover(sm.SM):
 			if dist[2] <= 0.8:
 				return J
 			elif dist[2] < 1.8:
-				fv = 0.3
+				a.fvel = 0.3
+
+			szerr = dist[0] + dist[4] + 0.08 - self.corridor
 
 			# any( jtype&(1<<i) and dist[3-i] > 1.5 for i in (0,2) )
-			if jtype & 4 and abs(sur[0]) > 0.5:
-				fv = 0.3
-			elif jtype & 1 and abs(sur[1]) > 0.5:
-				fv = 0.3
+			# if jtype&4 and abs(sur[0]) > 0.5:
+			#	fv = 0.3
+			#elif jtype&1 and abs(sur[1]) > 0.5:
+			#	fv = 0.3
+			if False:
+				pass
 			else:
-				fv = 0.5
+				a.fvel = 0.4
 				
-				if jtype:
-					serr = sum(err) if jtype == 5 else 0
-				else:
-					serr = err[1]
-
-				if abs(serr) > 0.1:
-					rv = 0.3*serr
-					fv = 0.15
+				if abs(szerr) >= 0.002 or abs(err[0]) >= 0.05:
+					print szerr, err[0]
+					
+					szk = 4.0 if err[0] >= 0 else -4.0
+					
+					a.fvel = 0.15
+					# a.rvel = 0.3*err[0] - szk*szerr
 
 		elif curS.startswith('R'):
-			rv = -0.3
-			fv = 0.25
+			a = io.Action(fvel=0.25,rvel=-0.3)
 			
 			if jtype:
 				if em[0]: curS = 'R2' if jtype&2 else 'R1'
@@ -109,8 +108,7 @@ class RobotMover(sm.SM):
 				return J
 
 		elif curS.startswith('L'):
-			rv = 0.3
-			fv = 0.25
+			a = io.Action(fvel=0.25,rvel=0.3)
 			
 			if jtype:
 				if em[1]: curS = 'L2' if jtype&2 else 'L1'
@@ -127,7 +125,7 @@ class RobotMover(sm.SM):
 				return J
 
 		elif curS.startswith('U'):
-			rv = 0.3
+			a.rvel = 0.3
 
 			if curS == 'U' and any(em):
 				curS = 'U0'
@@ -137,7 +135,25 @@ class RobotMover(sm.SM):
 		else:
 			print 'What'
 			
-		return ( ( curS, path, jtype ), io.Action(fvel=fv,rvel=rv) )
+		return ( ( curS, path, jtype ), a )
 
-if __name__ == "__main__":
-	mover = RobotMover('brainSM','FL')
+if __name__ == "__builtin__":
+
+	path = 'FLFRFRFRF'
+	# path = 'FLFFFSU'
+
+	def setup():
+		robot.behavior = RobotMover( 'brainSM', path )
+
+	def brainStart():
+		robot.behavior.start()
+
+	def step():
+		robot.behavior.step(io.SensorInput()).execute()
+		io.done(robot.behavior.isDone())
+
+	def brainStop():
+		pass
+
+	def shutdown():
+		pass
