@@ -4,7 +4,8 @@ from soar.io import io
 
 class RobotMover(sm.SM):
 
-	corridor = 1.5
+	botwidth = 0.08 # 0.12
+	corridor = 1.5 - botwidth
 	
 	def __init__( self, name, starting='' ):
 		self.startState = starting
@@ -17,60 +18,55 @@ class RobotMover(sm.SM):
 		a = io.Action()
 
 		if isinstance( state, basestring ):
-			curS = 'J'
-			path = state
+			if state == 'H': return state, a
+			curS, path = 'J', state
 		else:
 			curS, path, jtype = state
 			J = ( ( 'J', path, jtype ), a )
 
-		# print '\t'.join( str(round(i,3)) for i in dist )
-
 		try:
 			if time.time() - state[0] >= 0:
-				print 'Done'
 				return J
 			else:
-				return state, io.Action()
+				return state, a
 		except TypeError:
 			pass
 
-		# if curS not in 'HJ': print ( "%2s" % curS )
-
 		dist = [ min(2,i) for i in inp.sonars ]
+
+		if curS == 'J':
+			if not path: return 'H', a
+
+			curS = path[0]
+			if curS == 'S':
+				print 'Waiting, temp: ', inp.temperature
+				curS = int(time.time()) + 8
+
+			jtype = sum( 1<<i for i in (0,1,2) if dist[3-i] < 2.0 )
+			return ( ( curS, path[1:], jtype ), a )
+
+		i# print ( "%2s" % curS )
+
 		em = ( dist[0] > self.corridor, dist[4] > self.corridor )
 		err = ( dist[0] - dist[4], dist[1] - dist[3] )
 
-		if curS == 'H':
-			pass
+		if curS == 'F':
 
-		elif curS == 'J':
-			jtype = sum( 1<<i for i in (0,1,2) if dist[3-i] < 2.0 )
-			if path:
-				curS = path[0]
-				path = path[1:]
-				if curS == 'S':
-					print 'Waiting...', inp.temperature
-					return ( int(time.time())+8, path, jtype ), io.Action()
-			else:
-				curS = 'H'
+			szerr = dist[0] + dist[4] - self.corridor
 
-		elif curS == 'F':
-
-			if jtype == 5 and any(em):
-				return J
-			if not ( jtype or any(em) ):
-				return J
-			if jtype == 4 and ( em[0] or not em[1] ):
-				return J
-			if jtype == 1 and ( em[1] or not em[0] ):
-				return J
+			#if jtype == 5 and any(em):
+			#	return J
+			#if not ( jtype or any(em) ):
+			#	return J
+			#if jtype == 4 and ( em[0] or not em[1] ):
+			#	return J
+			#if jtype == 1 and ( em[1] or not em[0] ):
+			#	return J
 
 			if dist[2] <= 0.8:
 				return J
-			elif dist[2] < 1.8:
-				a.fvel = 0.3
-
-			szerr = dist[0] + dist[4] + 0.08 - self.corridor
+			#elif dist[2] < 1.8:
+			#	a.fvel = 0.3
 
 			# any( jtype&(1<<i) and dist[3-i] > 1.5 for i in (0,2) )
 			# if jtype&4 and abs(sur[0]) > 0.5:
@@ -80,15 +76,18 @@ class RobotMover(sm.SM):
 			if False:
 				pass
 			else:
-				a.fvel = 0.4
+				a.fvel = 0.1
+				print '\t'.join( str(round(i,3)) for i in dist[:5] ),
 				
-				if abs(szerr) >= 0.002 or abs(err[0]) >= 0.05:
-					print szerr, err[0]
+				if abs(szerr) >= 0.02 or abs(err[0]) >= 0.08:
+					print "\t%.2f\t%.4f" % ( szerr, err[0] )
 					
 					szk = 4.0 if err[0] >= 0 else -4.0
 					
-					a.fvel = 0.15
-					# a.rvel = 0.3*err[0] - szk*szerr
+					a.fvel = 0.05
+					a.rvel = 0.2 * err[0] * ( 1 - szerr )
+				else:
+					print
 
 		elif curS.startswith('R'):
 			a = io.Action(fvel=0.25,rvel=-0.3)
@@ -139,7 +138,7 @@ class RobotMover(sm.SM):
 
 if __name__ == "__builtin__":
 
-	path = 'FLFRFRFRF'
+	path = 'F'
 	# path = 'FLFFFSU'
 
 	def setup():
