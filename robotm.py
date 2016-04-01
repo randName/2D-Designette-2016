@@ -19,7 +19,7 @@ class RobotMover(sm.SM):
 
 		if isinstance( state, basestring ):
 			if state == 'H': return state, a
-			curS, path = 'J', state
+			curS, path = 'I', state
 		else:
 			curS, path, jtype = state
 			J = ( ( 'J', path, jtype ), a )
@@ -32,10 +32,13 @@ class RobotMover(sm.SM):
 		except TypeError:
 			pass
 
-		dist = [ min(2,i) for i in inp.sonars ]
+		dist = [ min(2,i) for i in inp.sonars[:5] ]
 
-		if curS == 'J':
+		if curS in 'IJ':
 			if not path: return 'H', a
+
+			if curS == 'I':
+				pass # Init sensors
 
 			curS = path[0]
 			if curS == 'S':
@@ -45,7 +48,7 @@ class RobotMover(sm.SM):
 			jtype = sum( 1<<i for i in (0,1,2) if dist[3-i] < 2.0 )
 			return ( ( curS, path[1:], jtype ), a )
 
-		i# print ( "%2s" % curS )
+		# print ( "%2s" % curS )
 
 		em = ( dist[0] > self.corridor, dist[4] > self.corridor )
 		err = ( dist[0] - dist[4], dist[1] - dist[3] )
