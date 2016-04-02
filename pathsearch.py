@@ -3,9 +3,9 @@ from itertools import combinations, permutations
 class Map():
 
     paths = {
-        'AB': "FRF", 'AC': "FFFRF", 'AD': "FFFF", 'AX': "FLFFLF", 'AH': "FFFLFFRF",
-        'BC': "FRFFRF", 'BD': "FRFFF", 'BX': "FFFLF", 'BH': "FFFRFFF", 'CD': "FRF",
-        'CX': "FFFLFFF", 'CH': "FFFRF", 'DX': "FFFRFFLF", 'DH': "FRFFRF",
+        'AB': "R", 'AC': "FR", 'AD': "FF", 'AX': "LL", 'AH': "FLR",
+        'BC': "RR", 'BD': "RF", 'BX': "FL", 'BH': "FRF", 'CD': "R",
+        'CX': "FLF", 'CH': "FR", 'DX': "FRL", 'DH': "RR",
     }
 
     costs = {
@@ -29,10 +29,11 @@ class Map():
             return s.costs[ end+start ]
         return 0
 
-    def walk( s, r ):
-        w = ''.join( s.getpath(r[i],r[i+1])+'SU' for i in xrange(len(r)-1) )[:-2]
-        c = sum( s.getcost(r[i],r[i+1]) for i in xrange(len(r)-1) )
-        return w, c
+    def walkpath( s, r ):
+        return ''.join( s.getpath(r[i],r[i+1])+'SU' for i in xrange(len(r)-1) )[:-2]
+
+    def walkcost( s, r ):
+        return sum( s.getcost(r[i],r[i+1]) for i in xrange(len(r)-1) )
 
 def sstr( s ): return ''.join( sorted( s ) )
 
@@ -233,7 +234,7 @@ def get_candidate_paths( payloads, path, noisy=False ):
             except KeyError:
                 pass
             seen_p[p] = 1
-            movement, cost = map.walk( phead + p + ptail )
+            cost = map.walkcost( phead + p + ptail )
             if cost > min_cost: continue
             min_cost = cost
             candidates.append( ( cost, p, grouping ) )
@@ -243,7 +244,7 @@ def get_candidate_paths( payloads, path, noisy=False ):
 
     return candidates
 
-def get_targets( url ):
+def get_targets_challenge( url ):
     """Parse targets from url"""
 
     req = urllib2.Request( url, headers={'User-Agent':'Mozilla/5.0'} )
