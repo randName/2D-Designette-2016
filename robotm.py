@@ -4,7 +4,8 @@ from soar.io import io
 
 class RobotMover(sm.SM):
 
-    botwidth = 0.08 # 0.12
+    # botwidth = 0.08
+    botwidth = 0.145
     corridor = 1.5 - botwidth
     
     def __init__( self, name, starting=() ):
@@ -12,12 +13,6 @@ class RobotMover(sm.SM):
         self.startState = starting
 
     def getNextValues( self, state, inp ):
-
-        def dge( i ):
-            if dist[i] == 2.5: return 1.0
-            e = 1.44*dist[i*2]/dist[i]
-            if 0.99 < e < 1.01: return 1.0
-            return e
 
         a = io.Action()
 
@@ -56,35 +51,29 @@ class RobotMover(sm.SM):
 
         szerr = dist[-2] + dist[2] - self.corridor
         lrerr = dist[-2] - dist[2]
-        if abs( lrerr ) <= 0.08: lrerr = 0
+        if abs( lrerr ) <= 0.05: lrerr = 0
 
-        lde, rde = dge(-1), dge(1)
-        if lde > 1.0 or rde < 1.0:
-            td = 1
-        elif lde < 1.0 or rde > 1.0:
-            td = -1
-        else:
-            td = 0
-        
         if curS == 'A': # Alley
 
-            if any(em) or dist[0] < 0.8:
-                return ( 'J', path ), a
+            #if any(em) or dist[0] < 0.8:
+            #    return ( 'J', path ), a
 
-            if szerr <= -0.01:
-                return ( 'O', path ), a
-            elif szerr <= 0.005:
+            # if szerr <= -0.1:
+            #    return ( 'O', path ), a
+            if szerr <= 0.01:
                 szerr = 0
 
-            a.fvel = 0.5
+            # a.fvel = 0.1
 
-            # print '\t'.join( str(round(i,3)) for i in dist )
+            print '\t'.join( str(round(i,3)) for i in dist ),
 
             if lrerr or szerr:
-                a.fvel = 0.1
-                a.rvel = 0.2*lrerr - 4.0*td*szerr
+            #     a.fvel = 0.05
+            #     a.rvel = 0.2*lrerr # - 4.0*td*szerr
                 
-                # print "%.3f\t%.3f" % ( lrerr, szerr )
+                 print "\t%.3f\t%.3f" % ( lrerr, szerr )
+            else:
+                 print
             
             return ( curS, path ), a
 
@@ -101,7 +90,7 @@ class RobotMover(sm.SM):
             if not any(em):
                 return A
 
-            a.fvel = 0.5
+            a.fvel = 0.2
 
         elif dir == 'U':
             if not stage and any(em):
@@ -121,7 +110,7 @@ class RobotMover(sm.SM):
                 return A
 
             if not stage:
-                if dist[0] < 2.0:
+                if dist[0] < self.corridor:
                     stage = 'O'
                 elif dist[z] < self.corridor:
                     stage = 'A'
@@ -139,8 +128,10 @@ class RobotMover(sm.SM):
                 elif stage == 'E2' and em[z]:
                     stage = 'B'
 
-            a.fvel = 0.25
-            a.rvel = z*0.3
+            a.fvel = 0.1
+            a.rvel = z*0.18
+
+	print a.fvel, a.rvel
 
         return ( "%s%s" % ( dir, stage ), path ), a
 
@@ -166,6 +157,7 @@ if __name__ == "__builtin__":
 
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
+    path = ( 'A', ('L','X') )
 
     def setup():
         robot.behavior = RobotMover( 'brainSM', path )
