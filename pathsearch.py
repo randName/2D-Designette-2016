@@ -8,7 +8,7 @@ class Map():
         'AB': "R", 'AC': "FR", 'AD': "FF", 'AX': "LL", 'AH': "FLR",
         'BC': "RR", 'BD': "RF", 'BX': "FL", 'BH': "FRF", 'CD': "R",
         'CX': "FLF", 'CH': "FR", 'DX': "FRL", 'DH': "RR", 'HX': "FF"
-    )
+    }
 
     costs = {
         'AB': 5, 'AC': 8, 'AD': 7, 'AX': 9, 'AH': 11,
@@ -221,7 +221,7 @@ def get_candidate_paths( payloads, path, noisy=False ):
     else:
         max_trips = 3
 
-    map = Map()
+    map = Map(1)
     candidates = []
     min_cost = 80
     phead = path[0]
@@ -295,5 +295,5 @@ def brute_force(n):
 if __name__ == "__main__":
 
     # test_targets()
-
+    print Map(1).walkpath('HXAXBXCXDH')
     # brute_force(15)
