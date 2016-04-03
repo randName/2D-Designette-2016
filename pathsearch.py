@@ -2,27 +2,34 @@ from itertools import combinations, permutations
 
 class Map():
 
-    paths = {
+    paths_0 = { 'XA': "R", 'XB': "F", 'XC': "L" }
+
+    paths_1 = {
         'AB': "R", 'AC': "FR", 'AD': "FF", 'AX': "LL", 'AH': "FLR",
         'BC': "RR", 'BD': "RF", 'BX': "FL", 'BH': "FRF", 'CD': "R",
-        'CX': "FLF", 'CH': "FR", 'DX': "FRL", 'DH': "RR",
-    }
+        'CX': "FLF", 'CH': "FR", 'DX': "FRL", 'DH': "RR", 'HX': "FF"
+    )
 
     costs = {
         'AB': 5, 'AC': 8, 'AD': 7, 'AX': 9, 'AH': 11,
         'BC': 9, 'BD': 8, 'BX': 8, 'BH': 10, 'CD': 5,
         'CX': 10, 'CH': 8, 'DX': 11, 'DH': 9,
     }
+    
+    def __init__( s, level=0 ):
+        s.level = level
 
     def getpath( s, start, end ):
-        if start + end in s.paths:
-            return s.paths[ start+end ]
-        if end + start in s.paths:
-            p = s.paths[ end+start ][::-1]
+        pa = s.paths_1 if s.level else s.paths_0
+        if start + end in pa:
+            return pa[ start+end ]
+        if end + start in pa:
+            p = pa[ end+start ][::-1]
             return p.replace('R','Z').replace('L','R').replace('Z','L')
         return ''
 
     def getcost( s, start, end ):
+        if s.level == 0: return 1
         if start + end in s.costs:
             return s.costs[ start+end ]
         if end + start in s.costs:
@@ -30,10 +37,10 @@ class Map():
         return 0
 
     def walkpath( s, r ):
-        return ''.join( s.getpath(r[i],r[i+1])+'SU' for i in xrange(len(r)-1) )[:-2]
+        return sum( ( ( s.getpath(r[i],r[i+1]), r[i+1] ) for i in xrange(len(r)-1) ), () )
 
     def walkcost( s, r ):
-        return sum( s.getcost(r[i],r[i+1]) for i in xrange(len(r)-1) )
+        return sum( s.getcost(r[i],r[i+1])+1 for i in xrange(len(r)-1) )
 
 def sstr( s ): return ''.join( sorted( s ) )
 
@@ -243,25 +250,6 @@ def get_candidate_paths( payloads, path, noisy=False ):
     candidates.sort( key=lambda x: x[0] )
 
     return candidates
-
-def get_targets_challenge( url ):
-    """Parse targets from url"""
-
-    req = urllib2.Request( url, headers={'User-Agent':'Mozilla/5.0'} )
-    data = urllib2.urlopen( req )
-
-    if not data: return None
-
-    paths = []
-    targets = {}
-
-    for line in data:
-        lz = line.split()
-        targets[lz[0]] = int(lz[1])
-
-    trips, path = decide_path( targets )
-
-    return ' -> '.join( i for i in path )
 
 def test_targets():
 
