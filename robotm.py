@@ -7,7 +7,7 @@ class RobotMover(sm.SM):
     botwidth = 0.08 # 0.12
     corridor = 1.5 - botwidth
     
-    def __init__( self, name, starting='' ):
+    def __init__( self, name, starting=() ):
         self.name = name
         self.startState = starting
 
@@ -24,34 +24,34 @@ class RobotMover(sm.SM):
         if state == 'H':
             return state, a
 
-        if isinstance( state, basestring ):
-            curS, path = 'A', state
-        else:
-            curS, path = state
+        curS, path = state
 
         try:
             if time.time() - curS >= 0:
-                state = ( 'J', path )
+                state = ( 'U', path )
             return state, a
-        except ( TypeError, IndexError ):
+        except TypeError:
             pass
-
-        dist = [ min( 2.5, inp.sonars[i] ) for i in (2,3,4,0,1) ]
         
         if curS == 'J': # Junction
             if not path:
-                print 'Finished'
                 return 'H', a
 
-            curS = path[0]
-            if curS == 'S':
-                print 'Waiting, temp: ', inp.temperature
-                curS = int(time.time()) + 8
-            else:
-                print "At junction, going %s" % curS
+            if not path[0]:
+                if len(path) == 2:
+                    self.log( path[1] )
+                    return 'H', a
 
-            return ( curS, path[1:] ), a
+                self.log( path[1], data=inp )
+                curS = int(time.time()) + ( 1 if path[1] == 'X' else 8 )
 
+                return ( curS, path[2:] ), a
+            
+            curS = path[0][0]
+            print "At junction, going %s" % curS
+            return ( curS, (path[0][1:],) + path[1:] ), a
+
+        dist = [ min( 2.5, inp.sonars[i] ) for i in (2,3,4,0,1) ]
         em = ( False, dist[2] > self.corridor, dist[-2] > self.corridor )
 
         szerr = dist[-2] + dist[2] - self.corridor
@@ -84,7 +84,7 @@ class RobotMover(sm.SM):
                 a.fvel = 0.1
                 a.rvel = 0.2*lrerr - 4.0*td*szerr
                 
-                print "%.3f\t%.3f" % ( lrerr, szerr )
+                # print "%.3f\t%.3f" % ( lrerr, szerr )
             
             return ( curS, path ), a
 
@@ -144,12 +144,27 @@ class RobotMover(sm.SM):
 
         return ( "%s%s" % ( dir, stage ), path ), a
 
+    def log( self, location, data=None ):
+        logstr = time.strftime("<%H:%M:%S> || <%d-%m-%Y> || ")
+
+        if not data:
+            logstr += "Finished, arrived at %s" % location
+        elif location != 'X':
+            logstr += "Expose Plates at %s" % location
+            tmf = time.strftime("%H:%M:%S|%d/%m/%y")
+            dt = { 'temp': data.temperature, 'ldr': 0, 'time': tmf }
+        else:
+            logstr += "Collect Plates at X"
+
+        print logstr
+
     def done( self, state ):
         return state[0] == 'H'
 
 if __name__ == "__builtin__":
 
-    path = 'FFSUFRFSUFRS'
+    # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
+    # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
 
     def setup():
         robot.behavior = RobotMover( 'brainSM', path )
@@ -162,7 +177,4 @@ if __name__ == "__builtin__":
         io.done(robot.behavior.isDone())
 
     def brainStop():
-        pass
-
-    def shutdown():
         pass
