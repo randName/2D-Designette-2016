@@ -1,6 +1,6 @@
 import urllib2
 
-def get_targets( url ):
+def get_targets( url, challenge=False ):
     """Parse targets from url"""
 
     req = urllib2.Request( url, headers={'User-Agent':'Mozilla/5.0'} )
@@ -13,11 +13,18 @@ def get_targets( url ):
 
     for line in data:
         lz = line.split()
-        plates = int(lz[1])
 
-        trips = plates/6
-        if plates % 6: trips += 1
-        path += (lz[0]+'X')*trips
+        if challenge:
+            targets[lz[0]] = int(lz[1])
+        else:
+            plates = int(lz[1])
+            trips = plates/6
+            if plates % 6: trips += 1
+            path += (lz[0]+'X')*trips
+
+    if challenge:
+        trips, path = decide_path( targets )
+        return path, trips
 
     return path
 
