@@ -11,15 +11,12 @@ class RobotMover(sm.SM):
         self.name = name
         self.startState = starting
 
-    def done( self, state ):
-        return state[0] == 'H'
-
     def getNextValues( self, state, inp ):
 
-        def dge( d ):
-            if d == 2.5: return 0
-            e = d - 1.02
-            if abs( e ) <= 0.01: return 0
+        def dge( i ):
+            if dist[i] == 2.5: return 1.0
+            e = 1.44*dist[i*2]/dist[i]
+            if 0.99 < e < 1.01: return 1.0
             return e
 
         a = io.Action()
@@ -43,6 +40,7 @@ class RobotMover(sm.SM):
         
         if curS == 'J': # Junction
             if not path:
+                print 'Finished'
                 return 'H', a
 
             curS = path[0]
@@ -50,48 +48,43 @@ class RobotMover(sm.SM):
                 print 'Waiting, temp: ', inp.temperature
                 curS = int(time.time()) + 8
             else:
-                curS += str( sum( 1<<i for i in (0,1,2) if dist[i*2-2] < self.corridor ) )
+                print "At junction, going %s" % curS
 
             return ( curS, path[1:] ), a
 
-        em = ( dist[0] < self.corridor, dist[2] > self.corridor, dist[-2] > self.corridor )
+        em = ( False, dist[2] > self.corridor, dist[-2] > self.corridor )
 
+        szerr = dist[-2] + dist[2] - self.corridor
         lrerr = dist[-2] - dist[2]
         if abs( lrerr ) <= 0.08: lrerr = 0
 
-        dgerr = ( 0, dge( dist[1] ), dge( dist[-1] ) )
+        lde, rde = dge(-1), dge(1)
+        if lde > 1.0 or rde < 1.0:
+            td = 1
+        elif lde < 1.0 or rde > 1.0:
+            td = -1
+        else:
+            td = 0
         
         if curS == 'A': # Alley
 
-            if any(em):
+            if any(em) or dist[0] < 0.8:
                 return ( 'J', path ), a
-
-            szerr = dist[-2] + dist[2] - self.corridor
 
             if szerr <= -0.01:
                 return ( 'O', path ), a
+            elif szerr <= 0.005:
+                szerr = 0
 
             a.fvel = 0.5
 
             # print '\t'.join( str(round(i,3)) for i in dist )
 
-            outs = "%.3f\t%.3f\t%.3f\t%.3f" % ( ( szerr, lrerr ) + dgerr[1:] )
-
-            if lrerr:
-                print "lr", outs
-                kz = 0.4 if szerr <= 0.02 else -0.3
+            if lrerr or szerr:
                 a.fvel = 0.1
-                a.rvel = kz*lrerr
-
-            elif szerr >= 0.01:
-                print "sz", outs
-                kz = 0
-                if dgerr[-1] < 0:
-                    kz = -2
-                if dgerr[1] < 0:
-                    kz = 2
-                a.fvel = 0.1
-                a.rvel = kz*szerr
+                a.rvel = 0.2*lrerr - 4.0*td*szerr
+                
+                print "%.3f\t%.3f" % ( lrerr, szerr )
             
             return ( curS, path ), a
 
@@ -100,26 +93,26 @@ class RobotMover(sm.SM):
             return ( curS, path ), a
 
         dir = curS[0]
-        jtype = int(curS[1])
-        stage = curS[2:]
+        stage = curS[1:]
 
         A = ( 'A', path ), a
 
         if dir == 'F':
-            if not any(em[1:]):
+            if not any(em):
                 return A
+
             a.fvel = 0.5
 
         elif dir == 'U':
-            a.rvel = 0.3
-
-            if not stage and any(em[1:]):
+            if not stage and any(em):
                 stage = 'A'
-            elif stage == 'A' and not any(em[1:]) and abs( lrerr ) < 0.1:
+            elif stage == 'A' and szerr <= 0.01:
                 return A
 
+            a.rvel = 0.3
+
         else:
-            if stage == 'C' and not any(em[1:]):
+            if stage == 'C' and szerr <= 0.01:
                 return A
 
             z = 1 if dir == 'L' else -1
@@ -127,21 +120,36 @@ class RobotMover(sm.SM):
             if stage == 'B' and not em[z]:
                 return A
 
-            a = io.Action(fvel=0.25,rvel=z*0.3)
-
-            if jtype:
-                if em[z]: stage = 'C' if jtype&2 else 'B'
-            else:
-                if not stage and not em[z]:
+            if not stage:
+                if dist[0] < 2.0:
+                    stage = 'O'
+                elif dist[z] < self.corridor:
                     stage = 'A'
-                elif stage == 'A' and em[z]:
+                else:
+                    stage = 'E'
+
+            elif stage in 'AO' and em[z]:
+                stage = 'C' if stage == 'O' else 'B'
+
+            elif stage.startswith('E'):
+                if stage == 'E' and em[z]:
+                    stage = 'E1'
+                elif stage == 'E1' and not em[z]:
+                    stage = 'E2'
+                elif stage == 'E2' and em[z]:
                     stage = 'B'
 
-        return ( "%s%d%s" % ( dir, jtype, stage ), path ), a
+            a.fvel = 0.25
+            a.rvel = z*0.3
+
+        return ( "%s%s" % ( dir, stage ), path ), a
+
+    def done( self, state ):
+        return state[0] == 'H'
 
 if __name__ == "__builtin__":
 
-    path = 'F'
+    path = 'FFSUFRFSUFRS'
 
     def setup():
         robot.behavior = RobotMover( 'brainSM', path )
