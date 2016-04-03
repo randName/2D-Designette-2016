@@ -37,7 +37,8 @@ class Map():
         return 0
 
     def walkpath( s, r ):
-        return sum( ( ( s.getpath(r[i],r[i+1]), r[i+1] ) for i in xrange(len(r)-1) ), () )
+        st = () if s.level else ('','X')
+        return sum( ( (s.getpath(r[i],r[i+1]),r[i+1]) for i in xrange(len(r)-1) ), st )
 
     def walkcost( s, r ):
         return sum( s.getcost(r[i],r[i+1])+1 for i in xrange(len(r)-1) )

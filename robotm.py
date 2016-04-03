@@ -162,6 +162,7 @@ class RobotMover(sm.SM):
         return state[0] == 'H'
 
 if __name__ == "__builtin__":
+    print "Running as brain"
 
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
