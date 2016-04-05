@@ -4,7 +4,7 @@ from soar.io import io
 
 class RobotSensors(sm.SM):
 
-    startState = ( 0, 0 )
+    startState = ( 0, 0, 0 )
     radtodeg = 57.29578
 
     def __init__( self, endt, botwidth=0.15, validmax=2.0, validmin=0.18 ):
@@ -31,11 +31,11 @@ class RobotSensors(sm.SM):
                 lrerr += s*( self.corridor/2 - dist[s] )
                 szerr += dist[s] - self.corridor/2
 
-        E = state if noValid else ( lrerr, szerr )
+        outv['szerr'] = szerr
+        derr = max( -0.02, min( 0.02, lrerr - state[0] ) )
+        outv['lrerr'] = state if noValid else ( lrerr, lrerr + state[1], derr )
 
-        outv['err'] = ( E, state )
-
-        return E, outv
+        return outv['lrerr'], outv
 
 class RobotMover(sm.SM):
 
@@ -61,7 +61,8 @@ class RobotMover(sm.SM):
         except ValueError:
             setp = None
 
-        nerr, perr = inp['err']
+        lrerr = inp['lrerr']
+        szerr = inp['szerr']
         dist = inp['sonar']
         em = inp['em']
 
@@ -72,9 +73,11 @@ class RobotMover(sm.SM):
             if not path:
                 return 'H', a
 
-            if not path[0] and not em[0]:
-                ferr = dist[0] - 0.6
-                if abs( ferr ) <= 0.2:
+            ferr = 0
+
+            if not path[0] and dist[0] <= 0.6:
+                ferr = dist[0] - 0.4
+                if abs( ferr ) <= 0.1:
                     if setp:
                         tdiff = setp - time.time()
                     else:
@@ -90,20 +93,23 @@ class RobotMover(sm.SM):
                         path = path[2:]
                     return ( curS, path ), a
 
-                a.fvel = 0.25*ferr
+                a.fvel = 0.19*ferr
 
             elif path[0] and ( ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ] ):
-                a.fvel = -0.1
+                a.fvel = -0.05
+                a.rvel = 0
                 print "Junction, going %s..." % path[0][0],
                 return ( path[0][0], (path[0][1:],) + path[1:] ), a
 
             else:
                 a.fvel = 0.15
 
-            # if szerr <= -0.1:
-            #    return ( 'O', path ), a
+            pidk = ( 0.23, 0, 29.1 )
+            outp = [ lrerr[i]*pidk[i] for i in (0,1,2) ]
+            a.rvel = sum( outp )
 
-            a.rvel = 30*nerr[0] - 29.97*perr[0]
+            if ferr:
+                a.rvel *= ferr
 
             return ( curS, path ), a
 
@@ -120,16 +126,18 @@ class RobotMover(sm.SM):
             curS += str( fin )
             tdiff = fin - inp['theta']
 
-        if not any( em[1:] ) and abs( tdiff ) <= 5 and abs( nerr[1] ) <= 0.5:
-            print "arrived"
-            return ( 'A', path ), a
+        tdiff = ( 360 + tdiff ) % 360
+        if tdiff > 180:
+            tdiff -= 360
 
-        if abs( tdiff ) <= 45:
-            a.rvel = tdiff*( 0.007 if z else 0.012 )
-        elif z:
-            a.rvel = 0.3*z
+        if abs( tdiff ) <= 5:
+            if not any( em[1:] ) and abs( szerr ) <= 0.5:
+                print "arrived"
+                return ( 'A', path ), a
         else:
-            a.rvel = -0.7
+            dt = 1 if tdiff > 0 else -1
+            limits = ( 0.2, 0.4 ) if z else ( 0.4, 0.8 )
+            a.rvel = dt*max( limits[0], min( limits[1], abs( tdiff )*0.0067 ) )
 
         a.fvel = 0.1 if z else 0
 
@@ -167,7 +175,7 @@ if __name__ == "__builtin__":
     endt = ( -168, 90, 0, -90 )
 
     def setup():
-        robot.behavior = sm.Cascade( RobotSensors( endt ), RobotMover( 'brainSM', path ) )
+        robot.behavior = sm.Cascade( RobotSensors( endt, botwidth=0.18 ), RobotMover( 'brainSM', path ) )
 
     def brainStart():
         robot.behavior.start()
