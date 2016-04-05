@@ -26,8 +26,9 @@ class RobotSensors(sm.SM):
                 szerr += dist[s] - self.corridor/2
 
         E = state if noValid else ( lrerr, szerr )
+        logd = ( inp.temperature, inp.light )
 
-        return E, { 'sonar': dist, 'err': ( E, state ), 'theta': bearing, 'em': em }
+        return E, { 'sonar': dist, 'err': ( E, state ), 'theta': bearing, 'em': em, 'log': logd }
 
 class RobotMover(sm.SM):
 
@@ -47,49 +48,47 @@ class RobotMover(sm.SM):
         curS, path = state
 
         try:
-            if time.time() - curS >= 0:
-                state = ( 'U', path )
-            return state, a
-        except TypeError:
-            pass
-        
-        if curS == 'J': # Junction
-            if not path:
-                return 'H', a
-
-            if not path[0]:
-                if len(path) == 2:
-                    self.log( path[1] )
-                    return 'H', a
-
-                self.log( path[1], data=inp )
-                curS = int(time.time()) + ( 1 if path[1] == 'X' else 8 )
-
-                return ( curS, path[2:] ), a
-            
-            a.fvel = -0.2
-            curS = path[0][0]
-            print "At junction, going %s" % curS
-            return ( curS, (path[0][1:],) + path[1:] ), a
+            setp = int(curS[1:])
+        except ValueError:
+            setp = None
 
         nerr, perr = inp['err']
         dist = inp['sonar']
         em = inp['em']
 
-        if curS == 'A': # Alley
+        if curS[0] == 'A':
 
-            # print '\t'.join( str(round(i,3)) for i in dist )
+            # print '\t'.join( "%.3f" % i for i in dist )
 
-            a.fvel = 0.15
+            if not path:
+                return 'H', a
 
-            if not path[0]:
-                 if not em[0]:
-                     ferr = dist[0] - 0.6
-                     if abs( ferr ) <= 0.2:
-                         return ( 'J', path ), a
-                     a.fvel = 0.25*ferr
-            elif ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ]:
-                 return ( 'J', path ), a
+            if not path[0] and not em[0]:
+                ferr = dist[0] - 0.6
+                if abs( ferr ) <= 0.2:
+                    if setp:
+                        tdiff = setp - time.time()
+                    else:
+                        tdiff = 1 if path[1] == 'X' else 8
+                        curS += str( int(time.time()) + tdiff )
+
+                    if tdiff <= 0:
+                        if len( path ) == 2:
+                            self.log( path[1] )
+                        else:
+                            self.log( path[1], data=inp['log'] )
+                            curS = 'U'
+                        path = path[2:]
+                    return ( curS, path ), a
+
+                a.fvel = 0.25*ferr
+
+            elif path[0] and ( ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ] ):
+                a.fvel = -0.25
+                return ( path[0][0], (path[0][1:],) + path[1:] ), a
+
+            else:
+                a.fvel = 0.15
 
             # if szerr <= -0.1:
             #    return ( 'O', path ), a
@@ -98,22 +97,21 @@ class RobotMover(sm.SM):
 
             return ( curS, path ), a
 
-        elif curS.startswith('O'):
+        elif curS[0] == 'O':
             print "obstacle"
             return ( curS, path ), a
 
         z = self.dz[curS[0]]
 
-        try:
-            tdiff = int( curS[1:] ) - inp['theta']
-        except ValueError:
-            endt = ( -170, 90, 0, -90 )
+        if setp:
+            tdiff = setp - inp['theta']
+        else:
+            endt = ( -162, 90, 0, -90 )
             fin = ( 360 + inp['theta'] + endt[z] ) % 360
             curS += str( fin )
             tdiff = fin - inp['theta']
 
         if not any( em[1:] ) and abs( tdiff ) <= 5 and abs( nerr[1] ) <= 0.5:
-            print "reached"
             return ( 'A', path ), a
 
         if abs( tdiff ) <= 45:
