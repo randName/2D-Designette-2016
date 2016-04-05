@@ -31,6 +31,8 @@ class RobotSensors(sm.SM):
 
 class RobotMover(sm.SM):
 
+    dz = { 'U': 0, 'L': 1, 'R': -1, 'F': 2 }
+
     def __init__( self, name, starting=() ):
         self.name = name
         self.startState = starting
@@ -65,6 +67,7 @@ class RobotMover(sm.SM):
 
                 return ( curS, path[2:] ), a
             
+            a.fvel = -0.2
             curS = path[0][0]
             print "At junction, going %s" % curS
             return ( curS, (path[0][1:],) + path[1:] ), a
@@ -77,16 +80,50 @@ class RobotMover(sm.SM):
 
             # print '\t'.join( str(round(i,3)) for i in dist )
 
+            a.fvel = 0.15
+
+            if not path[0]:
+                 if not em[0]:
+                     ferr = dist[0] - 0.6
+                     if abs( ferr ) <= 0.2:
+                         return ( 'J', path ), a
+                     a.fvel = 0.25*ferr
+            elif ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ]:
+                 return ( 'J', path ), a
+
             # if szerr <= -0.1:
             #    return ( 'O', path ), a
 
-            # a.fvel = 0.1
+            a.rvel = 30*nerr[0] - 29.97*perr[0]
 
             return ( curS, path ), a
 
         elif curS.startswith('O'):
             print "obstacle"
             return ( curS, path ), a
+
+        z = self.dz[curS[0]]
+
+        try:
+            tdiff = int( curS[1:] ) - inp['theta']
+        except ValueError:
+            endt = ( -170, 90, 0, -90 )
+            fin = ( 360 + inp['theta'] + endt[z] ) % 360
+            curS += str( fin )
+            tdiff = fin - inp['theta']
+
+        if not any( em[1:] ) and abs( tdiff ) <= 5 and abs( nerr[1] ) <= 0.5:
+            print "reached"
+            return ( 'A', path ), a
+
+        if abs( tdiff ) <= 45:
+            a.rvel = tdiff*( 0.007 if z else 0.012 )
+        elif z:
+            a.rvel = 0.3*z
+        else:
+            a.rvel = -0.7
+
+        a.fvel = 0.1 if z else 0
 
         return ( curS, path ), a
 
@@ -98,7 +135,7 @@ class RobotMover(sm.SM):
         elif location != 'X':
             logstr += "Expose Plates at %s" % location
             tmf = time.strftime("%H:%M:%S|%d/%m/%y")
-            dt = { 'temp': data.temperature, 'ldr': 0, 'time': tmf }
+            dt = { 'temp': data[0], 'ldr': data[1], 'time': tmf }
         else:
             logstr += "Collect Plates at X"
 
@@ -112,6 +149,7 @@ if __name__ == "__builtin__":
 
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
+    path = ('A',('L','C','R','X'))
 
     def setup():
         robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', path ) )
