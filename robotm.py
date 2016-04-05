@@ -2,6 +2,33 @@ import time
 from libdw import sm
 from soar.io import io
 
+class RobotSensors(sm.SM):
+
+    startState = ( 0, 0 )
+    radtodeg = 57.29578
+    validmax = 2.0
+    validmin = 0.18
+    middlesn = 0.7
+    botwidth = 0.15
+    corridor = 1.5 - botwidth
+
+    def getNextValues( self, state, inp ):
+        bearing = int( self.radtodeg*inp.odometry.theta )
+        dist = [ min( self.validmax, inp.sonars[i] ) for i in (2,4,0) ]
+        em = [ i > self.corridor for i in dist ]
+
+        lrerr, szerr, noValid = 0, 0, True
+
+        for s in (-1,1):
+            if self.validmin < dist[s] < self.validmax:
+                noValid = False
+                lrerr += s*( self.middlesn - dist[s] )
+                szerr += dist[s] - self.corridor/2
+
+        E = state if noValid else ( lrerr, szerr )
+
+        return E, { 'sonar': dist, 'err': ( E, state ), 'theta': bearing, 'em': em }
+
 class RobotMover(sm.SM):
 
     def __init__( self, name, starting=() ):
@@ -42,12 +69,9 @@ class RobotMover(sm.SM):
             print "At junction, going %s" % curS
             return ( curS, (path[0][1:],) + path[1:] ), a
 
-        dist = [ min( 2.5, inp.sonars[i] ) for i in (2,3,4,0,1) ]
-        em = ( False, dist[2] > self.corridor, dist[-2] > self.corridor )
-
-        szerr = dist[-2] + dist[2] - self.corridor
-        lrerr = dist[-2] - dist[2]
-        if abs( lrerr ) <= 0.05: lrerr = 0
+        nerr, perr = inp['err']
+        dist = inp['sonar']
+        em = inp['em']
 
         if curS == 'A': # Alley
 
@@ -88,10 +112,9 @@ if __name__ == "__builtin__":
 
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
-    path = ( 'A', ('L','X') )
 
     def setup():
-        robot.behavior = RobotMover( 'brainSM', path )
+        robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', path ) )
 
     def brainStart():
         robot.behavior.start()
