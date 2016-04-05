@@ -4,10 +4,6 @@ from soar.io import io
 
 class RobotMover(sm.SM):
 
-    # botwidth = 0.08
-    botwidth = 0.145
-    corridor = 1.5 - botwidth
-    
     def __init__( self, name, starting=() ):
         self.name = name
         self.startState = starting
@@ -55,85 +51,20 @@ class RobotMover(sm.SM):
 
         if curS == 'A': # Alley
 
-            #if any(em) or dist[0] < 0.8:
-            #    return ( 'J', path ), a
+            # print '\t'.join( str(round(i,3)) for i in dist )
 
             # if szerr <= -0.1:
             #    return ( 'O', path ), a
-            if szerr <= 0.01:
-                szerr = 0
 
             # a.fvel = 0.1
 
-            print '\t'.join( str(round(i,3)) for i in dist ),
-
-            if lrerr or szerr:
-            #     a.fvel = 0.05
-            #     a.rvel = 0.2*lrerr # - 4.0*td*szerr
-                
-                 print "\t%.3f\t%.3f" % ( lrerr, szerr )
-            else:
-                 print
-            
             return ( curS, path ), a
 
         elif curS.startswith('O'):
             print "obstacle"
             return ( curS, path ), a
 
-        dir = curS[0]
-        stage = curS[1:]
-
-        A = ( 'A', path ), a
-
-        if dir == 'F':
-            if not any(em):
-                return A
-
-            a.fvel = 0.2
-
-        elif dir == 'U':
-            if not stage and any(em):
-                stage = 'A'
-            elif stage == 'A' and szerr <= 0.01:
-                return A
-
-            a.rvel = 0.3
-
-        else:
-            if stage == 'C' and szerr <= 0.01:
-                return A
-
-            z = 1 if dir == 'L' else -1
-
-            if stage == 'B' and not em[z]:
-                return A
-
-            if not stage:
-                if dist[0] < self.corridor:
-                    stage = 'O'
-                elif dist[z] < self.corridor:
-                    stage = 'A'
-                else:
-                    stage = 'E'
-
-            elif stage in 'AO' and em[z]:
-                stage = 'C' if stage == 'O' else 'B'
-
-            elif stage.startswith('E'):
-                if stage == 'E' and em[z]:
-                    stage = 'E1'
-                elif stage == 'E1' and not em[z]:
-                    stage = 'E2'
-                elif stage == 'E2' and em[z]:
-                    stage = 'B'
-
-            a.fvel = 0.1
-            a.rvel = z*0.18
-
-	print a.fvel, a.rvel
-
-        return ( "%s%s" % ( dir, stage ), path ), a
+        return ( curS, path ), a
 
     def log( self, location, data=None ):
         logstr = time.strftime("<%H:%M:%S> || <%d-%m-%Y> || ")
