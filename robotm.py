@@ -6,37 +6,46 @@ class RobotSensors(sm.SM):
 
     startState = ( 0, 0 )
     radtodeg = 57.29578
-    validmax = 2.0
-    validmin = 0.18
-    middlesn = 0.7
-    botwidth = 0.15
-    corridor = 1.5 - botwidth
+
+    def __init__( self, endt, botwidth=0.15, validmax=2.0, validmin=0.18 ):
+        self.botwidth = botwidth
+        self.corridor = 1.5 - botwidth
+        self.validmax = validmax
+        self.validmin = validmin
+        self.endt = endt
 
     def getNextValues( self, state, inp ):
-        bearing = int( self.radtodeg*inp.odometry.theta )
         dist = [ min( self.validmax, inp.sonars[i] ) for i in (2,4,0) ]
         em = [ i > self.corridor for i in dist ]
+
+        outv = { 'endt': self.endt, 'sonar': tuple(dist), 'em': tuple(em) }
+
+        outv['theta'] = int( self.radtodeg*inp.odometry.theta )
+        outv['log'] = ( inp.temperature, inp.light )
 
         lrerr, szerr, noValid = 0, 0, True
 
         for s in (-1,1):
             if self.validmin < dist[s] < self.validmax:
                 noValid = False
-                lrerr += s*( self.middlesn - dist[s] )
+                lrerr += s*( self.corridor/2 - dist[s] )
                 szerr += dist[s] - self.corridor/2
 
         E = state if noValid else ( lrerr, szerr )
-        logd = ( inp.temperature, inp.light )
 
-        return E, { 'sonar': dist, 'err': ( E, state ), 'theta': bearing, 'em': em, 'log': logd }
+        outv['err'] = ( E, state )
+
+        return E, outv
 
 class RobotMover(sm.SM):
 
     dz = { 'U': 0, 'L': 1, 'R': -1, 'F': 2 }
 
-    def __init__( self, name, starting=() ):
+    def __init__( self, name, starting=(), logfile=None, cloud=None ):
         self.name = name
         self.startState = starting
+        self.logfile = logfile
+        self.cloud = cloud
 
     def getNextValues( self, state, inp ):
 
@@ -84,7 +93,8 @@ class RobotMover(sm.SM):
                 a.fvel = 0.25*ferr
 
             elif path[0] and ( ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ] ):
-                a.fvel = -0.25
+                a.fvel = -0.1
+                print "Junction, going %s..." % path[0][0],
                 return ( path[0][0], (path[0][1:],) + path[1:] ), a
 
             else:
@@ -106,12 +116,12 @@ class RobotMover(sm.SM):
         if setp:
             tdiff = setp - inp['theta']
         else:
-            endt = ( -162, 90, 0, -90 )
-            fin = ( 360 + inp['theta'] + endt[z] ) % 360
+            fin = ( 360 + inp['theta'] + inp['endt'][z] ) % 360
             curS += str( fin )
             tdiff = fin - inp['theta']
 
         if not any( em[1:] ) and abs( tdiff ) <= 5 and abs( nerr[1] ) <= 0.5:
+            print "arrived"
             return ( 'A', path ), a
 
         if abs( tdiff ) <= 45:
@@ -139,6 +149,12 @@ class RobotMover(sm.SM):
 
         print logstr
 
+        if self.logfile:
+            self.logfile.write( logstr )
+
+        if self.cloud:
+            self.cloud.put( 'station%s' % location, dt )
+
     def done( self, state ):
         return state[0] == 'H'
 
@@ -148,9 +164,10 @@ if __name__ == "__builtin__":
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
     path = ('A',('L','C','R','X'))
+    endt = ( -168, 90, 0, -90 )
 
     def setup():
-        robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', path ) )
+        robot.behavior = sm.Cascade( RobotSensors( endt ), RobotMover( 'brainSM', path ) )
 
     def brainStart():
         robot.behavior.start()
