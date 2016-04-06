@@ -40,12 +40,13 @@ class RobotMover(sm.SM):
 
     dz = { 'U': 0, 'L': 1, 'R': -1, 'F': 2 }
 
-    def __init__( self, name, endt, starting=(), logfile=None, cloud=None ):
+    def __init__( self, name, endt, pidk, starting=(), logfile=None, cloud=None ):
         self.name = name
         self.startState = starting
         self.logfile = logfile
         self.cloud = cloud
         self.endt = endt
+        self.pidk = pidk
 
     def getNextValues( self, state, inp ):
 
@@ -59,10 +60,9 @@ class RobotMover(sm.SM):
         try:
             setp = int(curS[1:])
         except ValueError:
-            setp = None
+            setp = curS[1:]
 
         lrerr = inp['lrerr']
-        szerr = inp['szerr']
         dist = inp['sonar']
         em = inp['em']
 
@@ -73,15 +73,13 @@ class RobotMover(sm.SM):
             if not path:
                 return 'H', a
 
-            ferr = 0
-
-            if not path[0] and not em[0]:
+            if not path[0]:
                 ferr = dist[0] - 0.4
                 if abs( ferr ) <= 0.1:
                     if setp:
                         tdiff = setp - time.time()
                     else:
-                        tdiff = 1 if path[1] == 'X' else 8
+                        tdiff = 5 if path[1] == 'X' else 7
                         curS += str( int(time.time()) + tdiff )
 
                     if tdiff <= 0:
@@ -92,24 +90,21 @@ class RobotMover(sm.SM):
                             curS = 'U'
                         path = path[2:]
                     return ( curS, path ), a
-
-                a.fvel = 0.19*ferr
-
-            elif path[0] and ( ( path[0][0] == 'F' and any( em[1:] ) ) or em[ -1 if path[0][0] == 'L' else 1 ] ):
-                a.fvel = -0.05
-                a.rvel = 0
-                print "Junction, going %s..." % path[0][0],
-                return ( path[0][0], (path[0][1:],) + path[1:] ), a
-
+                curS = 'A'
+                a.fvel = min( 0.15, 0.2*ferr )
             else:
+                nxtS = path[0][0]
+                if ( nxtS == 'F' and any( em[1:] ) ) or em[ -1 if nxtS == 'L' else 1 ]:
+                    a.fvel = -0.05
+                    print "Junction, going %s" % nxtS
+                    return ( path[0][0], (path[0][1:],) + path[1:] ), a
+
                 a.fvel = 0.15
 
-            pidk = ( 0.23, 0, 29.1 )
-            outp = [ lrerr[i]*pidk[i] for i in (0,1,2) ]
-            a.rvel = sum( outp )
+            a.rvel = sum( lrerr[i]*self.pidk[i] for i in (0,1,2) )
 
-            if ferr:
-                a.rvel *= ferr
+            if a.fvel < 0.15:
+                a.rvel *= (a.fvel/0.15)
 
             return ( curS, path ), a
 
@@ -131,8 +126,7 @@ class RobotMover(sm.SM):
             tdiff -= 360
 
         if abs( tdiff ) <= 5:
-            if not any( em[1:] ) and abs( szerr ) <= 0.5:
-                print "arrived"
+            if not any( em[1:] ):
                 return ( 'A', path ), a
         else:
             dt = 1 if tdiff > 0 else -1
@@ -171,13 +165,15 @@ if __name__ == "__builtin__":
 
     # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
-    path = ('A',('L','C','R','X'))
+    path = ('A',('LL','C','RR','X'))
     endt = ( -168, 90, 0, -90 )
+    pidk = ( 0.23, 0, 29.2 )
 
     def setup():
-        robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', endt, path ) )
+        robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', endt, pidk, path ) )
 
     def brainStart():
+        print time.strftime("Started at %H:%M:%S")
         robot.behavior.start()
 
     def step():
