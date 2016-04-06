@@ -7,18 +7,17 @@ class RobotSensors(sm.SM):
     startState = ( 0, 0, 0 )
     radtodeg = 57.29578
 
-    def __init__( self, endt, botwidth=0.15, validmax=2.0, validmin=0.18 ):
+    def __init__( self, botwidth=0.15, validmax=2.0, validmin=0.18 ):
         self.botwidth = botwidth
         self.corridor = 1.5 - botwidth
         self.validmax = validmax
         self.validmin = validmin
-        self.endt = endt
 
     def getNextValues( self, state, inp ):
         dist = [ min( self.validmax, inp.sonars[i] ) for i in (2,4,0) ]
         em = [ i > self.corridor for i in dist ]
 
-        outv = { 'endt': self.endt, 'sonar': tuple(dist), 'em': tuple(em) }
+        outv = { 'sonar': tuple(dist), 'em': tuple(em) }
 
         outv['theta'] = int( self.radtodeg*inp.odometry.theta )
         outv['log'] = ( inp.temperature, inp.light )
@@ -41,11 +40,12 @@ class RobotMover(sm.SM):
 
     dz = { 'U': 0, 'L': 1, 'R': -1, 'F': 2 }
 
-    def __init__( self, name, starting=(), logfile=None, cloud=None ):
+    def __init__( self, name, endt, starting=(), logfile=None, cloud=None ):
         self.name = name
         self.startState = starting
         self.logfile = logfile
         self.cloud = cloud
+        self.endt = endt
 
     def getNextValues( self, state, inp ):
 
@@ -75,7 +75,7 @@ class RobotMover(sm.SM):
 
             ferr = 0
 
-            if not path[0] and dist[0] <= 0.6:
+            if not path[0] and not em[0]:
                 ferr = dist[0] - 0.4
                 if abs( ferr ) <= 0.1:
                     if setp:
@@ -122,7 +122,7 @@ class RobotMover(sm.SM):
         if setp:
             tdiff = setp - inp['theta']
         else:
-            fin = ( 360 + inp['theta'] + inp['endt'][z] ) % 360
+            fin = ( 360 + inp['theta'] + self.endt[z] ) % 360
             curS += str( fin )
             tdiff = fin - inp['theta']
 
@@ -136,8 +136,8 @@ class RobotMover(sm.SM):
                 return ( 'A', path ), a
         else:
             dt = 1 if tdiff > 0 else -1
-            limits = ( 0.2, 0.4 ) if z else ( 0.4, 0.8 )
-            a.rvel = dt*max( limits[0], min( limits[1], abs( tdiff )*0.0067 ) )
+            limits = ( 0.1, 0.35 ) if z else ( 0.4, 0.8 )
+            a.rvel = dt*max( limits[0], min( limits[1], abs( tdiff )*0.0066 ) )
 
         a.fvel = 0.1 if z else 0
 
@@ -175,7 +175,7 @@ if __name__ == "__builtin__":
     endt = ( -168, 90, 0, -90 )
 
     def setup():
-        robot.behavior = sm.Cascade( RobotSensors( endt, botwidth=0.18 ), RobotMover( 'brainSM', path ) )
+        robot.behavior = sm.Cascade( RobotSensors(), RobotMover( 'brainSM', endt, path ) )
 
     def brainStart():
         robot.behavior.start()
