@@ -1,32 +1,37 @@
 from itertools import combinations, permutations
+from libdw.search import search
 
 class Map():
 
-    paths_0 = { 'XA': "R", 'XB': "F", 'XC': "L" }
+    actions = ( 0, 1, 2, 3 )
+    spins = ( 'F', 'L', 'L', 'R', 'R' )
 
-    paths_1 = {
-        'AB': "R", 'AC': "FR", 'AD': "FF", 'AX': "LL", 'AH': "FLR",
-        'BC': "RR", 'BD': "RF", 'BX': "FL", 'BH': "FRF", 'CD': "R",
-        'CX': "FLF", 'CH': "FR", 'DX': "FRL", 'DH': "RR", 'HX': "FF"
-    }
+    map = ({                   'A': ( '', '', 'S', '' ),
+        'B': ( 'S','','','' ), 'S': ( 'X','A','B','C' ), 'X': ( '','','S','' ),
+                               'C': ( '', 'S', '', '' ),
+    }, {
+                               'C': ( '', '', '', '2' ), 'B': ( '', '', '', '1' ), 
+        'D': ( '2','','','' ), '2': ( '1','C','D','3' ), '1': ( 'A','B','2','0' ), 'A': ( '','','1','' ),
+        'H': ( '3','','','' ), '3': ( '0','2','H', '' ), '0': ( 'X','1','3', '' ), 'X': ( '','','0','' ),
+    })
 
     costs = {
         'AB': 5, 'AC': 8, 'AD': 7, 'AX': 9, 'AH': 11,
         'BC': 9, 'BD': 8, 'BX': 8, 'BH': 10, 'CD': 5,
         'CX': 10, 'CH': 8, 'DX': 11, 'DH': 9,
     }
-    
+
     def __init__( s, level=0 ):
         s.level = level
 
     def getpath( s, start, end ):
-        pa = s.paths_1 if s.level else s.paths_0
-        if start + end in pa:
-            return pa[ start+end ]
-        if end + start in pa:
-            p = pa[ end+start ][::-1]
-            return p.replace('R','Z').replace('L','R').replace('Z','L')
-        return ''
+
+        def getNextNode( state, action ):
+            nxtNode = s.map[s.level][state][action]
+            return nxtNode if nxtNode else state
+
+        spath = search( start, lambda x: x == end, s.actions, getNextNode, True, True, 10 )[1:]
+        return ''.join( s.spins[spath[i+1][0]-spath[i][0]] for i in xrange(len(spath)-1) )
 
     def getcost( s, start, end ):
         if s.level == 0: return 1
