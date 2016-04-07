@@ -122,12 +122,14 @@ class RobotMover(sm.SM):
 
         if abs( tdiff ) <= 5:
             if not any( em[1:] ):
-                if not z or insidec > 7:
+                if not z or insidec >= 15:
                     if z: print "done"
                     return ( 'A', path ), a
                 else:
                     insidec += 1
                 print insidec,
+            else:
+                insidec = 0
         else:
             dt = 1 if tdiff > 0 else -1
             limits = ( 0.1, 0.35 ) if z else ( 0.4, 0.8 )
