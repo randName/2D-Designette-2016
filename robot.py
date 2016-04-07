@@ -20,7 +20,7 @@ class RobotSensors(sm.SM):
         outv = { 'sonar': tuple(dist), 'em': tuple(em) }
 
         outv['theta'] = int( self.radtodeg*inp.odometry.theta )
-        outv['log'] = ( inp.temperature, inp.light )
+        outv['log'] = { 'temp': inp.temperature, 'ldr': inp.light }
 
         lrerr, szerr, noValid = 0, 0, True
 
@@ -40,11 +40,10 @@ class RobotMover(sm.SM):
 
     dz = { 'U': 0, 'L': 1, 'R': -1, 'F': 2 }
 
-    def __init__( self, name, endt, pidk, starting=(), logfile=None, cloud=None ):
+    def __init__( self, name, endt, pidk, starting=(), log=lambda x: x ):
         self.name = name
         self.startState = starting
-        self.logfile = logfile
-        self.cloud = cloud
+        self.log = log
         self.endt = endt
         self.pidk = pidk
 
@@ -79,16 +78,16 @@ class RobotMover(sm.SM):
                     if setp:
                         tdiff = setp - time.time()
                     else:
-                        tdiff = 5 if path[1] == 'X' else 7
+                        tdiff = 4 if path[1] == 'X' else 7
                         curS += str( int(time.time()) + tdiff )
 
                     if tdiff <= 0:
-                        if len( path ) == 2:
-                            self.log( path[1] )
-                        else:
-                            self.log( path[1], data=inp['log'] )
-                            curS = 'U'
+                        print self.log( path[1:] )
+                        inp['log']['location'] = path[1]
                         path = path[2:]
+                        if path:
+                            self.log( inp['log'] )
+                            curS = 'U'
                     return ( curS, path ), a
                 curS = 'A'
                 a.fvel = min( 0.15, 0.2*ferr )
@@ -108,26 +107,27 @@ class RobotMover(sm.SM):
 
             return ( curS, path ), a
 
-        elif curS[0] == 'O':
-            print "obstacle"
-            return ( curS, path ), a
-
         z = self.dz[curS[0]]
+        insidec = 0
 
-        if setp:
-            tdiff = setp - inp['theta']
-        else:
-            fin = ( 360 + inp['theta'] + self.endt[z] ) % 360
-            curS += str( fin )
-            tdiff = fin - inp['theta']
+        if not setp:
+            setp = ( 360 + inp['theta'] + self.endt[z] ) % 360
+        elif setp > 400:
+            insidec = setp/1000
+            setp = setp%1000
 
-        tdiff = ( 360 + tdiff ) % 360
+        tdiff = ( 360 + setp - inp['theta'] ) % 360
         if tdiff > 180:
             tdiff -= 360
 
         if abs( tdiff ) <= 5:
             if not any( em[1:] ):
-                return ( 'A', path ), a
+                if not z or insidec > 7:
+                    if z: print "done"
+                    return ( 'A', path ), a
+                else:
+                    insidec += 1
+                print insidec,
         else:
             dt = 1 if tdiff > 0 else -1
             limits = ( 0.1, 0.35 ) if z else ( 0.4, 0.8 )
@@ -135,37 +135,16 @@ class RobotMover(sm.SM):
 
         a.fvel = 0.1 if z else 0
 
-        return ( curS, path ), a
-
-    def log( self, location, data=None ):
-        logstr = time.strftime("<%H:%M:%S> || <%d-%m-%Y> || ")
-
-        if not data:
-            logstr += "Finished, arrived at %s" % location
-        elif location != 'X':
-            logstr += "Expose Plates at %s" % location
-            tmf = time.strftime("%H:%M:%S|%d/%m/%y")
-            dt = { 'temp': data[0], 'ldr': data[1], 'time': tmf }
-        else:
-            logstr += "Collect Plates at X"
-
-        print logstr
-
-        if self.logfile:
-            self.logfile.write( logstr )
-
-        if self.cloud:
-            self.cloud.put( 'station%s' % location, dt )
+        return ( curS[0] + str( setp + insidec*1000 ), path ), a
 
     def done( self, state ):
         return state[0] == 'H'
 
 if __name__ == "__builtin__":
-    print "Running as brain"
+    print "Running robot.py as brain"
 
-    # path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RR','H'))
+    path = ('A', ('FF','X','RR','A','LL','X','RF','B','FL','X','FRF','C','FLF','X','RLF','D','RLF','X'))
     # path = ('F', ('','X','R','A','L','X','F','B','F','X','L','C','R','X'))
-    path = ('A',('LL','C','RR','X'))
     endt = ( -168, 90, 0, -90 )
     pidk = ( 0.23, 0, 29.2 )
 
