@@ -21,6 +21,7 @@ class RobotSensors(sm.SM):
 
         outv['theta'] = int( self.radtodeg*inp.odometry.theta )
         outv['log'] = { 'temp': inp.temperature, 'ldr': inp.light }
+        outv['diag'] = [ min( self.validmax, inp.sonars[i] ) for i in (5,3,1) ]
 
         lrerr, szerr, noValid = 0, 0, True
 
@@ -98,7 +99,18 @@ class RobotMover(sm.SM):
                     print "Junction, going %s" % nxtS
                     return ( path[0][0], (path[0][1:],) + path[1:] ), a
 
-                a.fvel = 0.15
+                gotobstacle = 0
+                if not em[0]:
+                    ferr = dist[0] - 0.5
+                    if abs( ferr ) <= 0.1:
+                        gotobstacle = setp + 1 if setp else 1
+                        if gotobstacle >= 10:
+                            return ( 'O', path ), a
+                    a.fvel = min( 0.15, 0.3*ferr )
+                else:
+                    a.fvel = 0.15
+
+                curS = curS[0] + str( gotobstacle )
 
             a.rvel = sum( lrerr[i]*self.pidk[i] for i in (0,1,2) )
 
@@ -106,6 +118,53 @@ class RobotMover(sm.SM):
                 a.rvel *= (a.fvel/0.15)
 
             return ( curS, path ), a
+
+        elif curS[0] == 'O':
+
+            if not setp:
+                setp = inp['theta']
+                sweep = ( setp + 325 ) % 360
+                stage = 1
+            else:
+                stage = setp/1000000
+                sweep = (setp%1000000)/1000
+                setp = setp%1000
+
+            tdiff = ( 360 + sweep - inp['theta'] ) % 360
+            if tdiff > 180:
+                tdiff -= 360
+            dt = 1 if tdiff > 0 else -1
+
+            if stage < 3:
+                if 0.7 < dist[0] < 2.0:
+                    stage = 3
+                elif abs( tdiff ) <= 4:
+                    stage = 3 - stage
+                    sweep = ( setp + ( 325 if stage-1 else 395 ) ) % 360
+                else:
+                    a.rvel = dt*max( 0.35, min( 0.8, abs( tdiff )*0.008 ) )
+            elif stage == 3:
+                ferr = dist[0] - 0.3
+                if abs( ferr ) <= 0.1:
+                    stage = 4
+                a.fvel = min( 0.1, 0.25*ferr )
+
+            elif stage == 4:
+                tdiff = ( 360 + setp - inp['theta'] ) % 360
+                if tdiff > 180:
+                    tdiff -= 360
+                dt = 1 if tdiff > 0 else -1
+                if abs( tdiff ) <= 5:
+                    stage = 5
+                a.fvel = 0.1
+                a.rvel = dt*max( 0.35, min( 0.8, abs( tdiff )*0.008 ) )
+
+            elif stage == 5:
+                a.fvel = 0.1
+                print sum( dist[1:] )
+                # return ( 'A', path ), a
+
+            return ( curS[0] + str( setp + sweep*1000 + stage*1000000 ), path ), a
 
         z = self.dz[curS[0]]
         insidec = 0
