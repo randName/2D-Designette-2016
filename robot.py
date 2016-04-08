@@ -73,7 +73,7 @@ class RobotMover(sm.SM):
             if not path:
                 return 'H', a
 
-            if not path[0]:
+            if path[0] == 'E':
                 ferr = dist[0] - 0.4
                 if abs( ferr ) <= 0.1:
                     if setp:
@@ -99,19 +99,19 @@ class RobotMover(sm.SM):
                     print "Junction, going %s" % nxtS
                     return ( path[0][0], (path[0][1:],) + path[1:] ), a
 
-                gotobstacle = setp if setp else 0
+            gotobstacle = setp if setp else 0
 
-                if not em[0] and gotobstacle <= 20:
-                    ferr = dist[0] - 0.5
-                    if abs( ferr ) <= 0.15:
-                        gotobstacle += 1
-                        if gotobstacle >= 10:
-                            return ( 'O', path ), a
-                    a.fvel = min( 0.15, 0.25*ferr )
-                else:
-                    a.fvel = 0.15
+            if path[0][-1] != 'E' and not em[0] and gotobstacle <= 20:
+                ferr = dist[0] - 0.5
+                if abs( ferr ) <= 0.15:
+                    gotobstacle += 1
+                    if gotobstacle >= 10:
+                        return ( 'O', path ), a
+                a.fvel = min( 0.15, 0.25*ferr )
+            else:
+                a.fvel = 0.15
 
-                curS = curS[0] + str( gotobstacle )
+            curS = curS[0] + str( gotobstacle )
 
             a.rvel = sum( lrerr[i]*self.pidk[i] for i in (0,1,2) )
 
