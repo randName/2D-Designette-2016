@@ -1,7 +1,7 @@
 import urllib2
 from time import strftime
 
-def get_targets( url, challenge=False ):
+def get_targets( url ):
     """Parse targets from url"""
 
     req = urllib2.Request( url, headers={'User-Agent':'Mozilla/5.0'} )
@@ -16,21 +16,15 @@ def get_targets( url, challenge=False ):
     for line in data:
         lz = line.split()
 
-        if challenge:
-            targets[lz[0]] = int(lz[1])
-        else:
-            plates = int(lz[1])
-            trips = plates/6
-            tt = ( lz[0]*6, )*trips
-            leftovers = plates % 6
-            if leftovers:
-                trips += 1
-                tt += ( lz[0]*leftovers, )
-            path += (lz[0]+'X')*trips
-            all_trips += tt
-
-    if challenge:
-        all_trips, path = decide_path( targets )
+        plates = int(lz[1])
+        trips = plates/6
+        tt = ( lz[0]*6, )*trips
+        leftovers = plates % 6
+        if leftovers:
+            trips += 1
+            tt += ( lz[0]*leftovers, )
+        path += (lz[0]+'X')*trips
+        all_trips += tt
 
     return path, all_trips
 

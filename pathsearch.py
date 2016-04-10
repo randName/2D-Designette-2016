@@ -43,7 +43,7 @@ class Map():
 
     def walkpath( s, r ):
         st = () if s.level else ('','X')
-        return sum( ( (s.getpath(r[i],r[i+1])+'E',r[i+1]) for i in xrange(len(r)-1) ), st )
+        return sum( ( (s.getpath(r[i],r[i+1]),r[i+1]) for i in xrange(len(r)-1) ), st )
 
     def walkcost( s, r ):
         return sum( s.getcost(r[i],r[i+1])+1 for i in xrange(len(r)-1) )
@@ -92,7 +92,7 @@ def get_combinations( s, partition ):
         for nc in get_combinations( news, partition[1:] ):
             yield tuple( sorted( (sc,) + nc ) )
 
-def decide_path( targets ):
+def decide_path( all_trips ):
     """Takes in a dict of targets and decides the path to take."""
 
     def submit( path, trips, sortl=True ):
@@ -102,6 +102,8 @@ def decide_path( targets ):
 
     trips = []
     path = [ 'X', '', 'H' ]
+    all_trips = ''.join( all_trips )
+    targets = { l: all_trips.count(l) for l in set(all_trips) }
 
     for k,v in targets.iteritems():
         if v >= 6:
