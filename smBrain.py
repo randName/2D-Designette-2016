@@ -45,7 +45,7 @@ def setup():
     robot.behavior = sm.Cascade( sensor, mover )
 
 def brainStart():
-    path, trips = get_targets( url, False )
+    path, trips = get_targets( url )
     mover.startState = getRobotStartState( level, path )
     print strftime("Started run at %H:%M:%S")
     robot.behavior.start()
